@@ -128,7 +128,17 @@ void PS4AuthUSBListener::mount(uint8_t dev_addr, uint8_t instance, uint8_t const
         host_get_report(PS4AuthReport::PS4_DEFINITION, report_buffer, 48);
     }
 }
+void PS4AuthUSBListener::unmount(uint8_t dev_addr) {
+    if ( ps4AuthData->dongle_ready == false ||
+        (dev_addr != ps_dev_addr) ) {
+        return;
+    }
 
+    ps_dev_addr = 0xFF;
+    ps_instance = 0xFF;
+    resetHostData();
+    ps4AuthData->dongle_ready = false;
+}
 void PS4AuthUSBListener::set_report_complete(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t report_type, uint16_t len) {
     if ( ps4AuthData->dongle_ready == false ||
         (dev_addr != ps_dev_addr) || (instance != ps_instance) ) {
