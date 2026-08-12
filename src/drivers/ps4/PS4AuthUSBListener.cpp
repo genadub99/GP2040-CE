@@ -80,7 +80,23 @@ bool PS4AuthUSBListener::host_set_report(uint8_t report_id, void* report, uint16
     awaiting_cb = true;
     return tuh_hid_set_report(ps_dev_addr, ps_instance, report_id, HID_REPORT_TYPE_FEATURE, report, len);
 }
+void PS4AuthUSBListener::xmount(uint8_t dev_addr, uint8_t instance,
+                                uint8_t controllerType, uint8_t subtype) {
+    uint16_t vid = 0;
+    uint16_t pid = 0;
 
+    tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+    // Nacon Compact PS4 controller in PC/XInput mode
+    if (vid == 0x146B && pid == 0x0603) {
+        ps_dev_addr = dev_addr;
+        ps_instance = instance;
+
+        // For now only mark that GP2040 actually reached
+        // the XInput mount path for our Nacon.
+        ps4AuthData->dongle_ready = true;
+    }
+}
 void PS4AuthUSBListener::mount(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
     // Prevent Magic-X double mount
     if (ps4AuthData->dongle_ready == true) {
