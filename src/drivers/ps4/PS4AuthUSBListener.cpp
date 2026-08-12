@@ -83,44 +83,50 @@ bool PS4AuthUSBListener::host_set_report(uint8_t report_id, void* report, uint16
 
 void PS4AuthUSBListener::mount(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
     // Prevent Magic-X double mount
-    if ( ps4AuthData->dongle_ready == true ) {
+    if (ps4AuthData->dongle_ready == true) {
         return;
     }
 
-    // Only a PS4 interface has vendor IDs F0, F1, F2, and F3
-    tuh_hid_report_info_t report_info[4];
-    uint8_t report_count = tuh_hid_parse_report_descriptor(report_info, 4, desc_report, desc_len);
-    bool isPS4Dongle = false;
-    for(uint8_t i = 0; i < report_count; i++) {
-        if ( report_info[i].usage_page == 0xFFF0 && 
-                (report_info[i].report_id == 0xF3) ) {
-            isPS4Dongle = true;
-            break;
+    uint16_t vid = 0;
+    uint16_t pid = 0;
+    tuh_vid_pid_get(dev_addr, &vid, &pid);
+
+    // Our Nacon Compact Controller
+    bool isNacon = (vid == 0x146B && pid == 0x0603);
+
+    bool isPS4Dongle = isNacon;
+
+    // Keep normal GP2040-CE detection for every other auth device
+    if (!isPS4Dongle) {
+        tuh_hid_report_info_t report_info[4];
+        uint8_t report_count =
+            tuh_hid_parse_report_descriptor(report_info, 4, desc_report, desc_len);
+
+        for (uint8_t i = 0; i < report_count; i++) {
+            if (report_info[i].usage_page == 0xFFF0 &&
+                report_info[i].report_id == 0xF3) {
+                isPS4Dongle = true;
+                break;
+            }
         }
     }
-    if (isPS4Dongle == false )
+
+    if (!isPS4Dongle) {
         return;
+    }
 
     ps_dev_addr = dev_addr;
     ps_instance = instance;
     ps4AuthData->dongle_ready = true;
 
-    // Reset as soon as its connected
-    memset(report_buffer, 0, PS4_ENDPOINT_SIZE);
-    report_buffer[0] = PS4AuthReport::PS4_DEFINITION;
-    host_get_report(PS4AuthReport::PS4_DEFINITION, report_buffer, 48);
-}
-
-void PS4AuthUSBListener::unmount(uint8_t dev_addr) {
-    if ( ps4AuthData->dongle_ready == false ||
-        (dev_addr != ps_dev_addr) ) {
-        return;
+    // Stock GP2040-CE asks for feature report 0x03 here.
+    // Nacon doesn't expose it in its PC HID descriptor, so don't
+    // let a failed 0x03 request stall the authentication state machine.
+    if (!isNacon) {
+        memset(report_buffer, 0, PS4_ENDPOINT_SIZE);
+        report_buffer[0] = PS4AuthReport::PS4_DEFINITION;
+        host_get_report(PS4AuthReport::PS4_DEFINITION, report_buffer, 48);
     }
-
-    ps_dev_addr = 0xFF;
-    ps_instance = 0xFF;
-    resetHostData();
-    ps4AuthData->dongle_ready = false;
 }
 
 void PS4AuthUSBListener::set_report_complete(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t report_type, uint16_t len) {
