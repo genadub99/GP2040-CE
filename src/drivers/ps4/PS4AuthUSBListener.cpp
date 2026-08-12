@@ -5,6 +5,7 @@
 #include "CRC32.h"
 #include "peripheralmanager.h"
 #include "usbhostmanager.h"
+#include "drivers/shared/xinput_host.h"
 
 static const uint8_t output_0xf3[] = { 0x0, 0x38, 0x38, 0, 0, 0, 0 };
 
@@ -87,15 +88,22 @@ void PS4AuthUSBListener::xmount(uint8_t dev_addr, uint8_t instance,
 
     tuh_vid_pid_get(dev_addr, &vid, &pid);
 
-    // Nacon Compact PS4 controller in PC/XInput mode
-    if (vid == 0x146B && pid == 0x0603) {
-        ps_dev_addr = dev_addr;
-        ps_instance = instance;
-
-        // For now only mark that GP2040 actually reached
-        // the XInput mount path for our Nacon.
-        ps4AuthData->dongle_ready = true;
+    if (vid != 0x146B || pid != 0x0603) {
+        return;
     }
+
+    ps_dev_addr = dev_addr;
+    ps_instance = instance;
+    ps4AuthData->dongle_ready = true;
+
+    // Xbox 360 / XInput player LED command.
+    // 0x06 = Player 1 LED ON.
+    const uint8_t led_packet[] = {
+        0x01, 0x03, 0x06
+    };
+
+    tuh_xinput_send_report(dev_addr, instance,
+                           led_packet, sizeof(led_packet));
 }
 void PS4AuthUSBListener::mount(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
     // Prevent Magic-X double mount
